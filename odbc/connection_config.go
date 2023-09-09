@@ -1,4 +1,4 @@
-package csv
+package odbc
 
 import (
 	"github.com/turbot/steampipe-plugin-sdk/v5/plugin"
