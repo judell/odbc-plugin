@@ -35,6 +35,7 @@ const (
 
 func PluginTables(ctx context.Context, d *plugin.TableMapData) (map[string]*plugin.Table, error) {
 	// Initialize tables
+	plugin.Logger(ctx).Debug("csv.PluginTables starting")
 	tables := map[string]*plugin.Table{}
 
 	// Search for CSV files to create as tables
@@ -58,6 +59,9 @@ func PluginTables(ctx context.Context, d *plugin.TableMapData) (map[string]*plug
 func csvList(ctx context.Context, connection *plugin.Connection, d *plugin.TableMapData) ([]string, error) {
 	// Glob paths in config
 	// Fail if no paths are specified
+
+	plugin.Logger(ctx).Debug("csv.csvList calling GetConfig")
+
 	csvConfig := GetConfig(connection)
 	if csvConfig.Paths == nil {
 		return nil, errors.New("paths must be configured")
@@ -67,6 +71,7 @@ func csvList(ctx context.Context, connection *plugin.Connection, d *plugin.Table
 	var matches []string
 	paths := csvConfig.Paths
 	for _, i := range paths {
+		plugin.Logger(ctx).Debug("csv.csvList calling GetSourceFiles")
 		files, err := d.GetSourceFiles(i)
 		if err != nil {
 			plugin.Logger(ctx).Error("csv.csvList", "failed to fetch absolute path", err, "path", i)
@@ -92,6 +97,6 @@ func csvList(ctx context.Context, connection *plugin.Connection, d *plugin.Table
 
 		csvFilePaths = append(csvFilePaths, i)
 	}
-
+	plugin.Logger(ctx).Debug("csv.csvList", "paths", csvFilePaths)
 	return csvFilePaths, nil
 }
