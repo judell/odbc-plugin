@@ -37,25 +37,44 @@ func listODBC(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (
     }
     defer db.Close()
 
-    // Query for the desired columns "Title" and "Link"
-    rows, err := db.Query("SELECT Title, Link FROM rss")
+    // Fetch all columns for demonstration; ideally, you'd limit columns or add conditions as necessary
+    rows, err := db.Query("SELECT * FROM rss")
     if err != nil {
         return nil, err
     }
     defer rows.Close()
 
+    // Get column names
+    columns, err := rows.Columns()
+    if err != nil {
+        return nil, err
+    }
+
     // Iterate over the results and stream them
     for rows.Next() {
-        var title, link string
-        if err := rows.Scan(&title, &link); err != nil {
+        // Create a slice of interface{}'s to represent each column, and a value to which the column's value will be scanned
+        cols := make([]interface{}, len(columns))
+        colPtrs := make([]interface{}, len(columns))
+        for i := 0; i < len(columns); i++ {
+            colPtrs[i] = &cols[i]
+        }
+
+        // Scan the result into the column pointers...
+        if err := rows.Scan(colPtrs...); err != nil {
             return nil, err
         }
-        d.StreamListItem(ctx, map[string]string{
-            "Title": title,
-            "Link":  link,
-        })
+
+        // Create our map, and retrieve the value for each column from the pointers slice, then add it to our map
+        m := make(map[string]interface{})
+        for i, colName := range columns {
+            val := colPtrs[i].(*interface{})
+            m[colName] = *val
+        }
+
+        d.StreamListItem(ctx, m)
     }
 
     return nil, nil
 }
+
 
