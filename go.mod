@@ -2,10 +2,7 @@ module github.com/turbot/steampipe-plugin-csv
 
 go 1.19
 
-require (
-	github.com/alexbrainman/odbc v0.0.0-20230814102256-1421b829acc9
-	github.com/turbot/steampipe-plugin-sdk/v5 v5.4.1
-)
+require github.com/turbot/steampipe-plugin-sdk/v5 v5.4.1
 
 require (
 	cloud.google.com/go v0.65.0 // indirect
