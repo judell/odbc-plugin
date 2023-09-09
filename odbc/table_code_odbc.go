@@ -3,8 +3,9 @@ package odbc
 import (
 	"context"
 
-	//"github.com/turbot/go-kit/helpers"
+	"github.com/turbot/go-kit/helpers"
     "database/sql"
+	//"fmt"
     _ "github.com/alexbrainman/odbc"	
 	"github.com/turbot/steampipe-plugin-sdk/v5/grpc/proto"
 	"github.com/turbot/steampipe-plugin-sdk/v5/plugin"
@@ -12,14 +13,81 @@ import (
 
 )
 
+/*
 func tableODBC(ctx context.Context, connection *plugin.Connection) (*plugin.Table, error) {
+	plugin.Logger(ctx).Debug("tableODBC")
     // Hardcoding the columns "Title" and "Link"
     cols := []*plugin.Column{
         {Name: "Title", Type: proto.ColumnType_STRING, Description: "The title of the RSS item.", Transform: transform.FromField("Title")},
         {Name: "Link", Type: proto.ColumnType_STRING, Description: "The link of the RSS item.", Transform: transform.FromField("Link")},
     }
 
+	plugin.Logger(ctx).Debug("odbc", "cols", cols)
+
     return &plugin.Table{
+        Name:        "rss",
+        Description: "RSS ODBC Table",
+        List: &plugin.ListConfig{
+            Hydrate: listODBC,
+        },
+        Columns: cols,
+    }, nil
+}
+*/
+
+func tableODBC(ctx context.Context, connection *plugin.Connection) (*plugin.Table, error) {
+	plugin.Logger(ctx).Debug("tableODBC")
+
+	// Connect to the ODBC data source
+	
+	/*
+	plugin.Logger(ctx).Debug("tableODBC open db")
+    db, err := sql.Open("odbc", "DSN=CData RSS Source")
+    if err != nil {
+		plugin.Logger(ctx).Debug("tableODBC", "err", err)
+        return nil, err
+    }
+	plugin.Logger(ctx).Debug("tableODBC defer close db")
+    defer db.Close()
+
+    // Fetch column names from the ODBC source
+    rows, err := db.Query("SELECT * FROM rss WHERE 1=0")  // This will return an empty result set, but with column headers
+    if err != nil {
+		plugin.Logger(ctx).Debug("tableODBC", "err", err)
+        return nil, err
+    }
+
+	plugin.Logger(ctx).Debug("tableODBC", "rows", rows)
+
+    columns, err := rows.Columns()
+    if err != nil {
+		plugin.Logger(ctx).Debug("tableODBC", "err", err)
+        return nil, err
+    }
+    rows.Close() // Close the rows immediately as we just want column names
+	plugin.Logger(ctx).Debug("odbc", "columns", columns)
+
+
+    // Construct the table columns based on the fetched column names
+    cols := make([]*plugin.Column, len(columns))
+    for i, columnName := range columns {
+        cols[i] = &plugin.Column{
+            Name:        columnName,
+            Type:        proto.ColumnType_STRING, // Assuming string type for simplicity; a more robust approach would inspect column types
+            Description: columnName,
+            Transform:   transform.FromField(helpers.EscapePropertyName(columnName)),
+        }
+    }
+	*/
+
+	cols := []*plugin.Column{
+        {Name: "Title", Type: proto.ColumnType_STRING, Description: "The title of the RSS item.", Transform: transform.FromField("Title")},
+        {Name: "Link", Type: proto.ColumnType_STRING, Description: "The link of the RSS item.", Transform: transform.FromField("Link")},
+    }
+
+	plugin.Logger(ctx).Debug("odbc", "cols", cols)
+
+	return &plugin.Table{
         Name:        "rss",
         Description: "RSS ODBC Table",
         List: &plugin.ListConfig{
@@ -68,7 +136,8 @@ func listODBC(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (
         m := make(map[string]interface{})
         for i, colName := range columns {
             val := colPtrs[i].(*interface{})
-            m[colName] = *val
+            //m[colName] = *val
+			m[helpers.EscapePropertyName(colName)] = *val
         }
 
         d.StreamListItem(ctx, m)
