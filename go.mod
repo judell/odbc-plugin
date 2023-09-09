@@ -2,7 +2,10 @@ module github.com/turbot/steampipe-plugin-odbc
 
 go 1.19
 
-require github.com/turbot/steampipe-plugin-sdk/v5 v5.5.0
+require (
+	github.com/alexbrainman/odbc v0.0.0-20230814102256-1421b829acc9
+	github.com/turbot/steampipe-plugin-sdk/v5 v5.5.0
+)
 
 replace github.com/turbot/steampipe-plugin-odbc/odbc => ./
 
