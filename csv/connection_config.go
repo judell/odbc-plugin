@@ -5,38 +5,23 @@ import (
 	"github.com/turbot/steampipe-plugin-sdk/v5/plugin/schema"
 )
 
-type csvConfig struct {
-	Paths     []string `cty:"paths" steampipe:"watch"`
-	Separator *string  `cty:"separator"`
-	Comment   *string  `cty:"comment"`
-	Header    *string  `cty:"header"`
+type odbcConfig struct {
+	// Placeholder for future ODBC related configurations
 }
 
 var ConfigSchema = map[string]*schema.Attribute{
-	"paths": {
-		Type: schema.TypeList,
-		Elem: &schema.Attribute{Type: schema.TypeString},
-	},
-	"separator": {
-		Type: schema.TypeString,
-	},
-	"comment": {
-		Type: schema.TypeString,
-	},
-	"header": {
-		Type: schema.TypeString,
-	},
+	// Placeholder for future ODBC related configurations
 }
 
 func ConfigInstance() interface{} {
-	return &csvConfig{}
+	return &odbcConfig{}
 }
 
 // GetConfig :: retrieve and cast connection config from query data
-func GetConfig(connection *plugin.Connection) csvConfig {
+func GetConfig(connection *plugin.Connection) odbcConfig {
 	if connection == nil || connection.Config == nil {
-		return csvConfig{}
+		return odbcConfig{}
 	}
-	config, _ := connection.Config.(csvConfig)
+	config, _ := connection.Config.(odbcConfig)
 	return config
 }

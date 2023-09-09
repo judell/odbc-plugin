@@ -2,10 +2,6 @@ package csv
 
 import (
 	"context"
-	"errors"
-	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/turbot/steampipe-plugin-sdk/v5/plugin"
 	"github.com/turbot/steampipe-plugin-sdk/v5/plugin/transform"
@@ -13,90 +9,33 @@ import (
 
 func Plugin(ctx context.Context) *plugin.Plugin {
 	p := &plugin.Plugin{
-		Name: "steampipe-plugin-csv",
+		Name: "steampipe-plugin-odbc",
 		ConnectionConfigSchema: &plugin.ConnectionConfigSchema{
 			NewInstance: ConfigInstance,
 			Schema:      ConfigSchema,
 		},
 		DefaultTransform: transform.FromGo().NullIfZero(),
 		SchemaMode:       plugin.SchemaModeDynamic,
-		TableMapFunc:     PluginTables,
+		TableMapFunc:     PluginODBCTables,
 	}
 	return p
 }
 
-type key string
-
-const (
-	// keyPath has been added to avoid key collisions
-	keyPath       key    = "path"
-	gzipExtension string = ".gz"
-)
-
-func PluginTables(ctx context.Context, d *plugin.TableMapData) (map[string]*plugin.Table, error) {
-	// Initialize tables
-	plugin.Logger(ctx).Debug("csv.PluginTables starting")
+func PluginODBCTables(ctx context.Context, d *plugin.TableMapData) (map[string]*plugin.Table, error) {
+	plugin.Logger(ctx).Debug("odbc.PluginODBCTables starting")
 	tables := map[string]*plugin.Table{}
 
-	// Search for CSV files to create as tables
-	paths, err := csvList(ctx, d.Connection, d)
+	// You might want to list ODBC tables here. For simplicity, I'm assuming a single table named "rss"
+	// You can make this dynamic based on configuration or introspection of the ODBC source.
+	tableName := "rss"
+	plugin.Logger(ctx).Debug("odbc.PluginODBCTables calling tableODBC")
+	table, err := tableODBC(ctx, d.Connection)
 	if err != nil {
+		plugin.Logger(ctx).Debug("odbc.PluginODBCTables", "create_table_error", err, "table", tableName)
 		return nil, err
 	}
-	for _, i := range paths {
-		tableCtx := context.WithValue(ctx, keyPath, i)
-		base := strings.TrimSuffix(filepath.Base(i), gzipExtension)
-		tables[base[0:len(base)-len(filepath.Ext(base))]], err = tableCSV(tableCtx, d.Connection)
-		if err != nil {
-			plugin.Logger(ctx).Error("csv.PluginTables", "create_table_error", err, "path", i)
-			return nil, err
-		}
-	}
+	tables[tableName] = table
 
+	plugin.Logger(ctx).Debug("odbc.PluginODBCTables", "tables", tables)
 	return tables, nil
-}
-
-func csvList(ctx context.Context, connection *plugin.Connection, d *plugin.TableMapData) ([]string, error) {
-	// Glob paths in config
-	// Fail if no paths are specified
-
-	plugin.Logger(ctx).Debug("csv.csvList calling GetConfig")
-
-	csvConfig := GetConfig(connection)
-	if csvConfig.Paths == nil {
-		return nil, errors.New("paths must be configured")
-	}
-
-	// Gather file path matches for the glob
-	var matches []string
-	paths := csvConfig.Paths
-	for _, i := range paths {
-		plugin.Logger(ctx).Debug("csv.csvList calling GetSourceFiles")
-		files, err := d.GetSourceFiles(i)
-		if err != nil {
-			plugin.Logger(ctx).Error("csv.csvList", "failed to fetch absolute path", err, "path", i)
-			return nil, err
-		}
-		matches = append(matches, files...)
-	}
-
-	// Sanitize the matches to ignore the directories
-	var csvFilePaths []string
-	for _, i := range matches {
-		// Check if file or directory
-		fileInfo, err := os.Stat(i)
-		if err != nil {
-			plugin.Logger(ctx).Error("csv.csvList", "error getting file info", err, "path", i)
-			return nil, err
-		}
-
-		// Ignore directories
-		if fileInfo.IsDir() {
-			continue
-		}
-
-		csvFilePaths = append(csvFilePaths, i)
-	}
-	plugin.Logger(ctx).Debug("csv.csvList", "paths", csvFilePaths)
-	return csvFilePaths, nil
 }

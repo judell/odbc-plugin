@@ -3,8 +3,7 @@ module github.com/turbot/steampipe-plugin-csv
 go 1.19
 
 require (
-	github.com/dimchansky/utfbom v1.1.1
-	github.com/turbot/go-kit v0.5.0
+	github.com/alexbrainman/odbc v0.0.0-20230814102256-1421b829acc9
 	github.com/turbot/steampipe-plugin-sdk/v5 v5.4.1
 )
 
@@ -75,6 +74,7 @@ require (
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/stevenle/topsort v0.0.0-20130922064739-8130c1d7596b // indirect
 	github.com/tkrajina/go-reflector v0.5.6 // indirect
+	github.com/turbot/go-kit v0.5.0 // indirect
 	github.com/ulikunitz/xz v0.5.8 // indirect
 	github.com/zclconf/go-cty v1.12.1 // indirect
 	go.opencensus.io v0.22.4 // indirect
