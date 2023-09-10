@@ -16,6 +16,7 @@ import (
 
 )
 func getSchema(ctx context.Context) ([]*plugin.Column, error) {
+	plugin.Logger(ctx).Debug("odbc.getSchema")
 	// Check if schema file exists
 	if _, err := os.Stat("/tmp/schema_cache"); err == nil {
 		// Read the schema from the file
@@ -39,6 +40,7 @@ func getSchema(ctx context.Context) ([]*plugin.Column, error) {
 				Transform:   transform.FromField(helpers.EscapePropertyName(columnName)),
 			}
 		}
+		plugin.Logger(ctx).Debug("odbc.getSchema return existing", "cols", cols)
 		return cols, nil
 	}
 
@@ -76,7 +78,7 @@ func getSchema(ctx context.Context) ([]*plugin.Column, error) {
 		return nil, err
 	}
 	err = os.WriteFile("/tmp/schema_cache", jsonData, 0644)
-
+	plugin.Logger(ctx).Debug("odbc.getSchema return new cols", "cols", cols)
 	return cols, err
 }
 
@@ -102,7 +104,8 @@ func tableODBC(ctx context.Context, connection *plugin.Connection) (*plugin.Tabl
 }
 
 func listODBC(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (interface{}, error) {
-    // Connect to the ODBC data source
+	plugin.Logger(ctx).Debug("listODBC start")
+
     db, err := sql.Open("odbc", "DSN=CData RSS Source")
     if err != nil {
         return nil, err
@@ -122,6 +125,7 @@ func listODBC(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (
         return nil, err
     }
 
+	plugin.Logger(ctx).Debug("listODBC", "columns", columns)
     // Iterate over the results and stream them
     for rows.Next() {
         // Create a slice of interface{}'s to represent each column, and a value to which the column's value will be scanned
@@ -143,7 +147,6 @@ func listODBC(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (
             //m[colName] = *val
 			m[helpers.EscapePropertyName(colName)] = *val
         }
-
         d.StreamListItem(ctx, m)
     }
 
