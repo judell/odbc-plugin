@@ -3,6 +3,9 @@ package odbc
 import (
 	"context"
 
+	"encoding/json"
+	"os"
+
 	"github.com/turbot/go-kit/helpers"
     "database/sql"
 	//"fmt"
@@ -12,89 +15,90 @@ import (
 	"github.com/turbot/steampipe-plugin-sdk/v5/plugin/transform"	
 
 )
+func getSchema(ctx context.Context) ([]*plugin.Column, error) {
+	// Check if schema file exists
+	if _, err := os.Stat("/tmp/schema_cache"); err == nil {
+		// Read the schema from the file
+		fileData, err := os.ReadFile("/tmp/schema_cache")
+		if err != nil {
+			return nil, err
+		}
+		var columnNames []string
+		err = json.Unmarshal(fileData, &columnNames)
+		if err != nil {
+			return nil, err
+		}
 
-/*
-func tableODBC(ctx context.Context, connection *plugin.Connection) (*plugin.Table, error) {
-	plugin.Logger(ctx).Debug("tableODBC")
-    // Hardcoding the columns "Title" and "Link"
-    cols := []*plugin.Column{
-        {Name: "Title", Type: proto.ColumnType_STRING, Description: "The title of the RSS item.", Transform: transform.FromField("Title")},
-        {Name: "Link", Type: proto.ColumnType_STRING, Description: "The link of the RSS item.", Transform: transform.FromField("Link")},
-    }
+		// Reconstruct the columns
+		cols := make([]*plugin.Column, len(columnNames))
+		for i, columnName := range columnNames {
+			cols[i] = &plugin.Column{
+				Name:        columnName,
+				Type:        proto.ColumnType_STRING, // Assuming string type for simplicity; a more robust approach would inspect column types
+				Description: columnName,
+				Transform:   transform.FromField(helpers.EscapePropertyName(columnName)),
+			}
+		}
+		return cols, nil
+	}
 
-	plugin.Logger(ctx).Debug("odbc", "cols", cols)
+	// If the file doesn't exist, fetch the schema from the database
+	db, err := sql.Open("odbc", "DSN=CData RSS Source")
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
 
-    return &plugin.Table{
-        Name:        "rss",
-        Description: "RSS ODBC Table",
-        List: &plugin.ListConfig{
-            Hydrate: listODBC,
-        },
-        Columns: cols,
-    }, nil
+	rows, err := db.Query("SELECT * FROM rss WHERE 1=0") // This will return an empty result set, but with column headers
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	columnNames, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+
+	cols := make([]*plugin.Column, len(columnNames))
+	for i, columnName := range columnNames {
+		cols[i] = &plugin.Column{
+			Name:        columnName,
+			Type:        proto.ColumnType_STRING, // Assuming string type for simplicity; a more robust approach would inspect column types
+			Description: columnName,
+			Transform:   transform.FromField(helpers.EscapePropertyName(columnName)),
+		}
+	}
+
+	// Now, serialize columnNames and save to /tmp/schema_cache
+	jsonData, err := json.Marshal(columnNames)
+	if err != nil {
+		return nil, err
+	}
+	err = os.WriteFile("/tmp/schema_cache", jsonData, 0644)
+
+	return cols, err
 }
-*/
+
 
 func tableODBC(ctx context.Context, connection *plugin.Connection) (*plugin.Table, error) {
 	plugin.Logger(ctx).Debug("tableODBC")
 
-	// Connect to the ODBC data source
-	
-	/*
-	plugin.Logger(ctx).Debug("tableODBC open db")
-    db, err := sql.Open("odbc", "DSN=CData RSS Source")
-    if err != nil {
-		plugin.Logger(ctx).Debug("tableODBC", "err", err)
-        return nil, err
-    }
-	plugin.Logger(ctx).Debug("tableODBC defer close db")
-    defer db.Close()
-
-    // Fetch column names from the ODBC source
-    rows, err := db.Query("SELECT * FROM rss WHERE 1=0")  // This will return an empty result set, but with column headers
-    if err != nil {
-		plugin.Logger(ctx).Debug("tableODBC", "err", err)
-        return nil, err
-    }
-
-	plugin.Logger(ctx).Debug("tableODBC", "rows", rows)
-
-    columns, err := rows.Columns()
-    if err != nil {
-		plugin.Logger(ctx).Debug("tableODBC", "err", err)
-        return nil, err
-    }
-    rows.Close() // Close the rows immediately as we just want column names
-	plugin.Logger(ctx).Debug("odbc", "columns", columns)
-
-
-    // Construct the table columns based on the fetched column names
-    cols := make([]*plugin.Column, len(columns))
-    for i, columnName := range columns {
-        cols[i] = &plugin.Column{
-            Name:        columnName,
-            Type:        proto.ColumnType_STRING, // Assuming string type for simplicity; a more robust approach would inspect column types
-            Description: columnName,
-            Transform:   transform.FromField(helpers.EscapePropertyName(columnName)),
-        }
-    }
-	*/
-
-	cols := []*plugin.Column{
-        {Name: "Title", Type: proto.ColumnType_STRING, Description: "The title of the RSS item.", Transform: transform.FromField("Title")},
-        {Name: "Link", Type: proto.ColumnType_STRING, Description: "The link of the RSS item.", Transform: transform.FromField("Link")},
-    }
+	cols, err := getSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	plugin.Logger(ctx).Debug("odbc", "cols", cols)
 
 	return &plugin.Table{
-        Name:        "rss",
-        Description: "RSS ODBC Table",
-        List: &plugin.ListConfig{
-            Hydrate: listODBC,
-        },
-        Columns: cols,
-    }, nil
+		Name:        "rss",
+		Description: "RSS ODBC Table",
+		List: &plugin.ListConfig{
+			Hydrate: listODBC,
+		},
+		Columns: cols,
+	}, nil
 }
 
 func listODBC(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (interface{}, error) {
