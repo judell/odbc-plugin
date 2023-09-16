@@ -104,7 +104,7 @@ func getSchema(ctx context.Context, dataSource string, tableName string) ([]*plu
 				Name:        "dsn",
 				Type:        proto.ColumnType_STRING,
 				Description: "Data Source Name for the ODBC connection",
-				Transform:   transform.FromConstant("dsn"),
+				Transform:   transform.FromQual("dsn"),
 			}
 		} else {
 			cols[i] = &plugin.Column{
@@ -137,6 +137,7 @@ func tableODBC(ctx context.Context, connection *plugin.Connection) (*plugin.Tabl
 		Description: dsn,
 		List: &plugin.ListConfig{
 			Hydrate: listODBC,
+			KeyColumns: plugin.SingleColumn("dsn"),
 		},
 		Columns: cols,
 	}, nil
@@ -145,7 +146,8 @@ func tableODBC(ctx context.Context, connection *plugin.Connection) (*plugin.Tabl
 func listODBC(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (interface{}, error) {
 	plugin.Logger(ctx).Debug("listODBC start")
 
-	dsn := "CData Slack Source"
+	dsn := d.EqualsQualString("dsn")
+	plugin.Logger(ctx).Debug("listODBC", "dsn", dsn)
 
 	db, err := sql.Open("odbc", "DSN="+dsn)
 	if err != nil {
