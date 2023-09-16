@@ -42,7 +42,7 @@ func getSchema(ctx context.Context, dataSource string, tableName string) ([]*plu
 					cols[i] = &plugin.Column{
 						Name:        columnName,
 						Type:        proto.ColumnType_STRING,
-						Description: columnName,
+						Description: dataSource + " " + columnName,
 						Transform:   transform.FromField(helpers.EscapePropertyName(columnName)),
 					}
 				}
@@ -119,7 +119,7 @@ func tableODBC(ctx context.Context, connection *plugin.Connection) (*plugin.Tabl
 
 	return &plugin.Table{
 			Name:        tableName,
-			Description: "ODBC Table",
+			Description: dsn,
 			List: &plugin.ListConfig{
 					Hydrate: listODBC,
 			},
@@ -132,7 +132,7 @@ func tableODBC(ctx context.Context, connection *plugin.Connection) (*plugin.Tabl
 func listODBC(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (interface{}, error) {
 	plugin.Logger(ctx).Debug("listODBC start")
 
-    db, err := sql.Open("odbc", "DSN=CData RSS Source")
+    db, err := sql.Open("odbc", "DSN=CData Slack Source")
     if err != nil {
         return nil, err
     }
