@@ -15,8 +15,10 @@ import (
 	"github.com/turbot/steampipe-plugin-sdk/v5/plugin/transform"	
 
 )
-func getSchema(ctx context.Context) ([]*plugin.Column, error) {
+
+func getSchema(ctx context.Context, dataSource string) ([]*plugin.Column, error) {
 	plugin.Logger(ctx).Debug("odbc.getSchema")
+
 	// Check if schema file exists
 	if _, err := os.Stat("/tmp/schema_cache"); err == nil {
 		// Read the schema from the file
@@ -24,28 +26,30 @@ func getSchema(ctx context.Context) ([]*plugin.Column, error) {
 		if err != nil {
 			return nil, err
 		}
-		var columnNames []string
-		err = json.Unmarshal(fileData, &columnNames)
+		var schemas map[string][]string
+		err = json.Unmarshal(fileData, &schemas)
 		if err != nil {
 			return nil, err
 		}
 
-		// Reconstruct the columns
-		cols := make([]*plugin.Column, len(columnNames))
-		for i, columnName := range columnNames {
-			cols[i] = &plugin.Column{
-				Name:        columnName,
-				Type:        proto.ColumnType_STRING, // Assuming string type for simplicity; a more robust approach would inspect column types
-				Description: columnName,
-				Transform:   transform.FromField(helpers.EscapePropertyName(columnName)),
+		// If the schema for the current data source is present in the cache
+		if columnNames, ok := schemas[dataSource]; ok {
+			// Reconstruct the columns from the cached data
+			cols := make([]*plugin.Column, len(columnNames))
+			for i, columnName := range columnNames {
+				cols[i] = &plugin.Column{
+					Name:        columnName,
+					Type:        proto.ColumnType_STRING,
+					Description: columnName,
+					Transform:   transform.FromField(helpers.EscapePropertyName(columnName)),
+				}
 			}
+			return cols, nil
 		}
-		plugin.Logger(ctx).Debug("odbc.getSchema return existing", "cols", cols)
-		return cols, nil
 	}
 
-	// If the file doesn't exist, fetch the schema from the database
-	db, err := sql.Open("odbc", "DSN=CData RSS Source")
+	// If the schema for the current data source isn't present in the cache (or if the cache file doesn't exist), fetch the schema from the database
+	db, err := sql.Open("odbc", "DSN=" + dataSource)
 	if err != nil {
 		return nil, err
 	}
@@ -62,31 +66,46 @@ func getSchema(ctx context.Context) ([]*plugin.Column, error) {
 		return nil, err
 	}
 
-	cols := make([]*plugin.Column, len(columnNames))
-	for i, columnName := range columnNames {
-		cols[i] = &plugin.Column{
-			Name:        columnName,
-			Type:        proto.ColumnType_STRING, // Assuming string type for simplicity; a more robust approach would inspect column types
-			Description: columnName,
-			Transform:   transform.FromField(helpers.EscapePropertyName(columnName)),
-		}
-	}
+	plugin.Logger(ctx).Debug("odbc.getSchema", "columnNames", columnNames)
 
-	// Now, serialize columnNames and save to /tmp/schema_cache
-	jsonData, err := json.Marshal(columnNames)
+	// Create a new map (or use the previously read map) and add the fetched schema for the current data source
+	schemas := make(map[string][]string)
+	if _, err := os.Stat("/tmp/schema_cache"); err == nil {
+		fileData, _ := os.ReadFile("/tmp/schema_cache")
+		json.Unmarshal(fileData, &schemas)
+	}
+	schemas[dataSource] = columnNames
+
+	// Serialize and save to /tmp/schema_cache
+	jsonData, err := json.Marshal(schemas)
 	if err != nil {
 		return nil, err
 	}
 	err = os.WriteFile("/tmp/schema_cache", jsonData, 0644)
-	plugin.Logger(ctx).Debug("odbc.getSchema return new cols", "cols", cols)
-	return cols, err
-}
+	if err != nil {
+		return nil, err
+	}
 
+	cols := make([]*plugin.Column, len(columnNames))
+	for i, columnName := range columnNames {
+		cols[i] = &plugin.Column{
+			Name:        columnName,
+			Type:        proto.ColumnType_STRING,
+			Description: columnName,
+			Transform:   transform.FromField(helpers.EscapePropertyName(columnName)),
+		}
+	}
+	return cols, nil
+}
 
 func tableODBC(ctx context.Context, connection *plugin.Connection) (*plugin.Table, error) {
 	plugin.Logger(ctx).Debug("tableODBC")
 
-	cols, err := getSchema(ctx)
+	config := GetConfig(connection)
+	plugin.Logger(ctx).Debug("tableODBC",  "config", config)
+
+
+	cols, err := getSchema(ctx, "CData RSS Source")
 	if err != nil {
 		return nil, err
 	}
