@@ -139,7 +139,7 @@ func listODBC(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (
     defer db.Close()
 
     // Fetch all columns for demonstration; ideally, you'd limit columns or add conditions as necessary
-    rows, err := db.Query("SELECT * FROM rss")
+    rows, err := db.Query("SELECT * FROM users")
     if err != nil {
         return nil, err
     }
