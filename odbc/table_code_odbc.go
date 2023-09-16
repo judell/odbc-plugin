@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"encoding/json"
+	"fmt"
 	"os"
 
 	"github.com/turbot/go-kit/helpers"
@@ -16,7 +17,7 @@ import (
 
 )
 
-func getSchema(ctx context.Context, dataSource string) ([]*plugin.Column, error) {
+func getSchema(ctx context.Context, dataSource string, tableName string) ([]*plugin.Column, error) {
 	plugin.Logger(ctx).Debug("odbc.getSchema")
 
 	// Check if schema file exists
@@ -55,7 +56,8 @@ func getSchema(ctx context.Context, dataSource string) ([]*plugin.Column, error)
 	}
 	defer db.Close()
 
-	rows, err := db.Query("SELECT * FROM rss WHERE 1=0") // This will return an empty result set, but with column headers
+	rows, err := db.Query(fmt.Sprintf("SELECT * FROM %s WHERE 1=0", tableName))
+
 	if err != nil {
 		return nil, err
 	}
@@ -104,8 +106,9 @@ func tableODBC(ctx context.Context, connection *plugin.Connection) (*plugin.Tabl
 	config := GetConfig(connection)
 	plugin.Logger(ctx).Debug("tableODBC",  "config", config)
 
+	dataSource, tableName := splitDataSourceAndTable("CData RSS Source:rss") // Or however you get this value
+	cols, err := getSchema(ctx, dataSource, tableName)
 
-	cols, err := getSchema(ctx, "CData RSS Source")
 	if err != nil {
 		return nil, err
 	}
