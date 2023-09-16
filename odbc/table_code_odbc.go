@@ -101,29 +101,25 @@ func getSchema(ctx context.Context, dataSource string, tableName string) ([]*plu
 }
 
 func tableODBC(ctx context.Context, connection *plugin.Connection) (*plugin.Table, error) {
-	plugin.Logger(ctx).Debug("tableODBC")
+	dsn := ctx.Value("dsn").(string)
+	tableName := ctx.Value("tableName").(string)
 
-	config := GetConfig(connection)
-	plugin.Logger(ctx).Debug("tableODBC",  "config", config)
-
-	dataSource, tableName := splitDataSourceAndTable("CData RSS Source:rss") // Or however you get this value
-	cols, err := getSchema(ctx, dataSource, tableName)
-
+	cols, err := getSchema(ctx, dsn, tableName)
 	if err != nil {
-		return nil, err
+			return nil, err
 	}
 
-	plugin.Logger(ctx).Debug("odbc", "cols", cols)
-
 	return &plugin.Table{
-		Name:        "rss",
-		Description: "RSS ODBC Table",
-		List: &plugin.ListConfig{
-			Hydrate: listODBC,
-		},
-		Columns: cols,
+			Name:        tableName,
+			Description: "ODBC Table",
+			List: &plugin.ListConfig{
+					Hydrate: listODBC,
+			},
+			Columns: cols,
 	}, nil
 }
+
+
 
 func listODBC(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (interface{}, error) {
 	plugin.Logger(ctx).Debug("listODBC start")

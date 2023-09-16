@@ -22,20 +22,19 @@ func Plugin(ctx context.Context) *plugin.Plugin {
 }
 
 func PluginODBCTables(ctx context.Context, d *plugin.TableMapData) (map[string]*plugin.Table, error) {
-	plugin.Logger(ctx).Debug("odbc.PluginODBCTables starting")
 	tables := map[string]*plugin.Table{}
-
-	// You might want to list ODBC tables here. For simplicity, I'm assuming a single table named "rss"
-	// You can make this dynamic based on configuration or introspection of the ODBC source.
-	tableName := "rss"
-	plugin.Logger(ctx).Debug("odbc.PluginODBCTables calling tableODBC")
-	table, err := tableODBC(ctx, d.Connection)
-	if err != nil {
-		plugin.Logger(ctx).Debug("odbc.PluginODBCTables", "create_table_error", err, "table", tableName)
-		return nil, err
+	
+	config := GetConfig(d.Connection)
+	for _, dataSource := range config.DataSources {
+			dsn, tableName := splitDataSourceAndTable(dataSource)
+			tableCtx := context.WithValue(ctx, "dsn", dsn)
+			tableCtx = context.WithValue(tableCtx, "tableName", tableName)
+			table, err := tableODBC(tableCtx, d.Connection)
+			if err != nil {
+					return nil, err
+			}
+			tables[tableName] = table
 	}
-	tables[tableName] = table
 
-	plugin.Logger(ctx).Debug("odbc.PluginODBCTables", "tables", tables)
 	return tables, nil
 }
