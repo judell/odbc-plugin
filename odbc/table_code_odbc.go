@@ -27,25 +27,27 @@ func getSchema(ctx context.Context, dataSource string, tableName string) ([]*plu
 		if err != nil {
 			return nil, err
 		}
-		var schemas map[string][]string
+		var schemas map[string]map[string][]string
 		err = json.Unmarshal(fileData, &schemas)
 		if err != nil {
 			return nil, err
 		}
 
-		// If the schema for the current data source is present in the cache
-		if columnNames, ok := schemas[dataSource]; ok {
-			// Reconstruct the columns from the cached data
-			cols := make([]*plugin.Column, len(columnNames))
-			for i, columnName := range columnNames {
-				cols[i] = &plugin.Column{
-					Name:        columnName,
-					Type:        proto.ColumnType_STRING,
-					Description: columnName,
-					Transform:   transform.FromField(helpers.EscapePropertyName(columnName)),
+		// If the schema for the current data source and table is present in the cache
+		if tables, ok := schemas[dataSource]; ok {
+			if columnNames, ok := tables[tableName]; ok {
+				// Reconstruct the columns from the cached data
+				cols := make([]*plugin.Column, len(columnNames))
+				for i, columnName := range columnNames {
+					cols[i] = &plugin.Column{
+						Name:        columnName,
+						Type:        proto.ColumnType_STRING,
+						Description: columnName,
+						Transform:   transform.FromField(helpers.EscapePropertyName(columnName)),
+					}
 				}
+				return cols, nil
 			}
-			return cols, nil
 		}
 	}
 
@@ -57,7 +59,6 @@ func getSchema(ctx context.Context, dataSource string, tableName string) ([]*plu
 	defer db.Close()
 
 	rows, err := db.Query(fmt.Sprintf("SELECT * FROM %s WHERE 1=0", tableName))
-
 	if err != nil {
 		return nil, err
 	}
@@ -67,16 +68,22 @@ func getSchema(ctx context.Context, dataSource string, tableName string) ([]*plu
 	if err != nil {
 		return nil, err
 	}
-
 	plugin.Logger(ctx).Debug("odbc.getSchema", "columnNames", columnNames)
 
 	// Create a new map (or use the previously read map) and add the fetched schema for the current data source
-	schemas := make(map[string][]string)
+	var schemas map[string]map[string][]string
 	if _, err := os.Stat("/tmp/schema_cache"); err == nil {
 		fileData, _ := os.ReadFile("/tmp/schema_cache")
 		json.Unmarshal(fileData, &schemas)
 	}
-	schemas[dataSource] = columnNames
+
+	if schemas == nil {
+		schemas = make(map[string]map[string][]string)
+	}
+	if schemas[dataSource] == nil {
+		schemas[dataSource] = make(map[string][]string)
+	}
+	schemas[dataSource][tableName] = columnNames
 
 	// Serialize and save to /tmp/schema_cache
 	jsonData, err := json.Marshal(schemas)
@@ -99,6 +106,7 @@ func getSchema(ctx context.Context, dataSource string, tableName string) ([]*plu
 	}
 	return cols, nil
 }
+
 
 func tableODBC(ctx context.Context, connection *plugin.Connection) (*plugin.Table, error) {
 	dsn := ctx.Value("dsn").(string)
