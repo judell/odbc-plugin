@@ -7,14 +7,13 @@ import (
 	"fmt"
 	"os"
 
+	"database/sql"
 	"github.com/turbot/go-kit/helpers"
-    "database/sql"
 	//"fmt"
-    _ "github.com/alexbrainman/odbc"	
+	_ "github.com/alexbrainman/odbc"
 	"github.com/turbot/steampipe-plugin-sdk/v5/grpc/proto"
 	"github.com/turbot/steampipe-plugin-sdk/v5/plugin"
-	"github.com/turbot/steampipe-plugin-sdk/v5/plugin/transform"	
-
+	"github.com/turbot/steampipe-plugin-sdk/v5/plugin/transform"
 )
 
 func getSchema(ctx context.Context, dataSource string, tableName string) ([]*plugin.Column, error) {
@@ -52,7 +51,7 @@ func getSchema(ctx context.Context, dataSource string, tableName string) ([]*plu
 	}
 
 	// If the schema for the current data source isn't present in the cache (or if the cache file doesn't exist), fetch the schema from the database
-	db, err := sql.Open("odbc", "DSN=" + dataSource)
+	db, err := sql.Open("odbc", "DSN="+dataSource)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +82,9 @@ func getSchema(ctx context.Context, dataSource string, tableName string) ([]*plu
 	if schemas[dataSource] == nil {
 		schemas[dataSource] = make(map[string][]string)
 	}
-	schemas[dataSource][tableName] = columnNames
+
+	columnNamesWithDSN := append([]string{"dsn"}, columnNames...)
+	schemas[dataSource][tableName] = columnNamesWithDSN
 
 	// Serialize and save to /tmp/schema_cache
 	jsonData, err := json.Marshal(schemas)
@@ -95,88 +96,100 @@ func getSchema(ctx context.Context, dataSource string, tableName string) ([]*plu
 		return nil, err
 	}
 
+	// Reconstruct the columns from the cached data
 	cols := make([]*plugin.Column, len(columnNames))
 	for i, columnName := range columnNames {
-		cols[i] = &plugin.Column{
-			Name:        columnName,
-			Type:        proto.ColumnType_STRING,
-			Description: columnName,
-			Transform:   transform.FromField(helpers.EscapePropertyName(columnName)),
+		if columnName == "dsn" {
+			cols[i] = &plugin.Column{
+				Name:        "dsn",
+				Type:        proto.ColumnType_STRING,
+				Description: "Data Source Name for the ODBC connection",
+				Transform:   transform.FromConstant("dsn"),
+			}
+		} else {
+			cols[i] = &plugin.Column{
+				Name:        columnName,
+				Type:        proto.ColumnType_STRING,
+				Description: dataSource + " " + columnName,
+				Transform:   transform.FromField(helpers.EscapePropertyName(columnName)),
+			}
 		}
 	}
+
+	plugin.Logger(ctx).Debug("odbc.getSchema", "cols", cols)
 	return cols, nil
 }
-
 
 func tableODBC(ctx context.Context, connection *plugin.Connection) (*plugin.Table, error) {
 	dsn := ctx.Value("dsn").(string)
 	tableName := ctx.Value("tableName").(string)
 
 	cols, err := getSchema(ctx, dsn, tableName)
+
+	plugin.Logger(ctx).Debug("tableODBC", "cols", cols)
+
 	if err != nil {
-			return nil, err
+		return nil, err
 	}
 
 	return &plugin.Table{
-			Name:        tableName,
-			Description: dsn,
-			List: &plugin.ListConfig{
-					Hydrate: listODBC,
-			},
-			Columns: cols,
+		Name:        tableName,
+		Description: dsn,
+		List: &plugin.ListConfig{
+			Hydrate: listODBC,
+		},
+		Columns: cols,
 	}, nil
 }
-
-
 
 func listODBC(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (interface{}, error) {
 	plugin.Logger(ctx).Debug("listODBC start")
 
-    db, err := sql.Open("odbc", "DSN=CData Slack Source")
-    if err != nil {
-        return nil, err
-    }
-    defer db.Close()
+	dsn := "CData Slack Source"
 
-    // Fetch all columns for demonstration; ideally, you'd limit columns or add conditions as necessary
-    rows, err := db.Query("SELECT * FROM users")
-    if err != nil {
-        return nil, err
-    }
-    defer rows.Close()
+	db, err := sql.Open("odbc", "DSN="+dsn)
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
 
-    // Get column names
-    columns, err := rows.Columns()
-    if err != nil {
-        return nil, err
-    }
+	// Fetch all columns for demonstration; ideally, you'd limit columns or add conditions as necessary
+	rows, err := db.Query("SELECT * FROM users")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
 
-	plugin.Logger(ctx).Debug("listODBC", "columns", columns)
-    // Iterate over the results and stream them
-    for rows.Next() {
-        // Create a slice of interface{}'s to represent each column, and a value to which the column's value will be scanned
-        cols := make([]interface{}, len(columns))
-        colPtrs := make([]interface{}, len(columns))
-        for i := 0; i < len(columns); i++ {
-            colPtrs[i] = &cols[i]
-        }
+	// Get column names
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
 
-        // Scan the result into the column pointers...
-        if err := rows.Scan(colPtrs...); err != nil {
-            return nil, err
-        }
+	// Iterate over the results and stream them
+	for rows.Next() {
+		// Create a slice of interface{}'s to represent each column, and a value to which the column's value will be scanned
+		cols := make([]interface{}, len(columns))
+		colPtrs := make([]interface{}, len(columns))
+		for i := 0; i < len(columns); i++ {
+			colPtrs[i] = &cols[i]
+		}
 
-        // Create our map, and retrieve the value for each column from the pointers slice, then add it to our map
-        m := make(map[string]interface{})
-        for i, colName := range columns {
-            val := colPtrs[i].(*interface{})
-            //m[colName] = *val
+		// Scan the result into the column pointers...
+		if err := rows.Scan(colPtrs...); err != nil {
+			return nil, err
+		}
+
+		// Create our map, and retrieve the value for each column from the pointers slice, then add it to our map
+		m := make(map[string]interface{})
+		m["dsn"] = dsn
+		for i, colName := range columns {
+			val := colPtrs[i].(*interface{})
+			//m[colName] = *val
 			m[helpers.EscapePropertyName(colName)] = *val
-        }
-        d.StreamListItem(ctx, m)
-    }
+		}
+		d.StreamListItem(ctx, m)
+	}
 
-    return nil, nil
+	return nil, nil
 }
-
-
