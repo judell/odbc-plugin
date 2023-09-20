@@ -149,49 +149,61 @@ func listODBC(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (
 	dsn := d.EqualsQualString("dsn")
 	plugin.Logger(ctx).Debug("listODBC", "dsn", dsn)
 
+	// Fetch data from the database
+	results, err := fetchFromDatabase(ctx, dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	// Stream the results
+	for _, result := range results {
+		d.StreamListItem(ctx, result)
+	}
+
+	return nil, nil
+}
+
+func fetchFromDatabase(ctx context.Context, dsn string) ([]map[string]interface{}, error) {
 	db, err := sql.Open("odbc", "DSN="+dsn)
 	if err != nil {
 		return nil, err
 	}
 	defer db.Close()
 
-	// Fetch all columns for demonstration; ideally, you'd limit columns or add conditions as necessary
+	// Fetch all columns for demonstration
 	rows, err := db.Query("SELECT * FROM users")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	// Get column names
 	columns, err := rows.Columns()
 	if err != nil {
 		return nil, err
 	}
 
-	// Iterate over the results and stream them
+	var results []map[string]interface{}
+
 	for rows.Next() {
-		// Create a slice of interface{}'s to represent each column, and a value to which the column's value will be scanned
 		cols := make([]interface{}, len(columns))
 		colPtrs := make([]interface{}, len(columns))
 		for i := 0; i < len(columns); i++ {
 			colPtrs[i] = &cols[i]
 		}
 
-		// Scan the result into the column pointers...
 		if err := rows.Scan(colPtrs...); err != nil {
 			return nil, err
 		}
 
-		// Create our map, and retrieve the value for each column from the pointers slice, then add it to our map
 		m := make(map[string]interface{})
 		m["dsn"] = dsn
 		for i, colName := range columns {
 			val := colPtrs[i].(*interface{})
-			//m[colName] = *val
 			m[helpers.EscapePropertyName(colName)] = *val
 		}
-		d.StreamListItem(ctx, m)
+
+		results = append(results, m)
 	}
 
-	return nil, nil
+	return results, nil
 }
