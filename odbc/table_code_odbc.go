@@ -83,7 +83,7 @@ func getSchema(ctx context.Context, dataSource string, tableName string) ([]*plu
 		schemas[dataSource] = make(map[string][]string)
 	}
 
-	columnNamesWithDSN := append([]string{"dsn"}, columnNames...)
+	columnNamesWithDSN := append([]string{"dsn", "tableName"}, columnNames...)
 	schemas[dataSource][tableName] = columnNamesWithDSN
 
 	// Serialize and save to /tmp/schema_cache
@@ -105,6 +105,13 @@ func getSchema(ctx context.Context, dataSource string, tableName string) ([]*plu
 				Type:        proto.ColumnType_STRING,
 				Description: "Data Source Name for the ODBC connection",
 				Transform:   transform.FromQual("dsn"),
+			}
+		} else if columnName == "tableName" {
+			cols[i] = &plugin.Column{
+				Name:        "tableName",
+				Type:        proto.ColumnType_STRING,
+				Description: "Table name",
+				Transform:   transform.FromQual("tableName"),
 			}
 		} else {
 			cols[i] = &plugin.Column{
@@ -132,12 +139,18 @@ func tableODBC(ctx context.Context, connection *plugin.Connection) (*plugin.Tabl
 		return nil, err
 	}
 
+	dsnCol := &plugin.KeyColumn{Name: "dsn"}
+	tableCol := &plugin.KeyColumn{Name: "tableName"}
+
 	return &plugin.Table{
 		Name:        tableName,
 		Description: dsn,
 		List: &plugin.ListConfig{
 			Hydrate: listODBC,
-			KeyColumns: plugin.SingleColumn("dsn"),
+			KeyColumns: []*plugin.KeyColumn{
+				dsnCol,
+				tableCol,
+			},
 		},
 		Columns: cols,
 	}, nil
@@ -147,10 +160,12 @@ func listODBC(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (
 	plugin.Logger(ctx).Debug("listODBC start")
 
 	dsn := d.EqualsQualString("dsn")
-	plugin.Logger(ctx).Debug("listODBC", "dsn", dsn)
+	tableName := d.EqualsQualString("tableName")
+
+	plugin.Logger(ctx).Debug("listODBC", "dsn", dsn, "tableName", tableName)
 
 	// Fetch data from the database
-	results, err := fetchFromDatabase(ctx, dsn)
+	results, err := fetchFromDatabase(ctx, dsn, tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +178,8 @@ func listODBC(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (
 	return nil, nil
 }
 
-func fetchFromDatabase(ctx context.Context, dsn string) ([]map[string]interface{}, error) {
+func fetchFromDatabase(ctx context.Context, dsn string, tableName string) ([]map[string]interface{}, error) {
+	plugin.Logger(ctx).Debug("odbc: fetchFromDatabase", "dsn", dsn, "tableName", tableName)
 	db, err := sql.Open("odbc", "DSN="+dsn)
 	if err != nil {
 		return nil, err
@@ -171,7 +187,7 @@ func fetchFromDatabase(ctx context.Context, dsn string) ([]map[string]interface{
 	defer db.Close()
 
 	// Fetch all columns for demonstration
-	rows, err := db.Query("SELECT * FROM users")
+	rows, err := db.Query("SELECT * FROM " + tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -197,6 +213,7 @@ func fetchFromDatabase(ctx context.Context, dsn string) ([]map[string]interface{
 
 		m := make(map[string]interface{})
 		m["dsn"] = dsn
+		m["tableName"] = tableName
 		for i, colName := range columns {
 			val := colPtrs[i].(*interface{})
 			m[helpers.EscapePropertyName(colName)] = *val
