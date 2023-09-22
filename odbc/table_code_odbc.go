@@ -3,9 +3,9 @@ package odbc
 import (
 	"context"
 
-	"encoding/json"
+	//"encoding/json"
 	"fmt"
-	"os"
+	//"os"
 	"strings"
 
 	"database/sql"
@@ -19,122 +19,47 @@ import (
 	"github.com/turbot/steampipe-plugin-sdk/v5/plugin/transform"
 )
 
-func getSchema(ctx context.Context, dataSource string, tablename string) ([]*plugin.Column, error) {
-	plugin.Logger(ctx).Debug("odbc.getSchema")
+func getSchemas(ctx context.Context, dataSource string, tablename string) ([]*plugin.Column, error) {
+    plugin.Logger(ctx).Debug("odbc.getSchema")
 
-	// Check if schema file exists
-	if _, err := os.Stat("/tmp/schema_cache"); err == nil {
-		// Read the schema from the file
-		fileData, err := os.ReadFile("/tmp/schema_cache")
-		if err != nil {
-			return nil, err
-		}
-		var schemas map[string]map[string][]string
-		err = json.Unmarshal(fileData, &schemas)
-		if err != nil {
-			return nil, err
-		}
+    db, err := sql.Open("odbc", "DSN="+dataSource)
+    if err != nil {
+        return nil, err
+    }
+    defer db.Close()
 
-		// If the schema for the current data source and table is present in the cache
-		if tables, ok := schemas[dataSource]; ok {
-			if columnNames, ok := tables[tablename]; ok {
-				// Reconstruct the columns from the cached data
-				cols := make([]*plugin.Column, len(columnNames))
-				for i, columnName := range columnNames {
-					cols[i] = &plugin.Column{
-						Name:        columnName,
-						Type:        proto.ColumnType_STRING,
-						Description: dataSource + " " + columnName,
-						Transform:   transform.FromField(helpers.EscapePropertyName(columnName)),
-					}
-				}
-				return cols, nil
-			}
-		}
-	}
+    rows, err := db.Query(fmt.Sprintf("SELECT * FROM %s WHERE 1=0", tablename))
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
 
-	// If the schema for the current data source isn't present in the cache (or if the cache file doesn't exist), fetch the schema from the database
-	db, err := sql.Open("odbc", "DSN="+dataSource)
-	if err != nil {
-		return nil, err
-	}
-	defer db.Close()
+    columnNames, err := rows.Columns()
+    if err != nil {
+        return nil, err
+    }
+    plugin.Logger(ctx).Debug("odbc.getSchema", "columnNames", columnNames)
 
-	rows, err := db.Query(fmt.Sprintf("SELECT * FROM %s WHERE 1=0", tablename))
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
+    cols := make([]*plugin.Column, len(columnNames))
+    for i, columnName := range columnNames {
+        cols[i] = &plugin.Column{
+            Name:        columnName,
+            Type:        proto.ColumnType_STRING,
+            Description: dataSource + " " + columnName,
+            Transform:   transform.FromField(helpers.EscapePropertyName(columnName)),
+        }
+    }
 
-	columnNames, err := rows.Columns()
-	if err != nil {
-		return nil, err
-	}
-	plugin.Logger(ctx).Debug("odbc.getSchema", "columnNames", columnNames)
-
-	// Create a new map (or use the previously read map) and add the fetched schema for the current data source
-	var schemas map[string]map[string][]string
-	if _, err := os.Stat("/tmp/schema_cache"); err == nil {
-		fileData, _ := os.ReadFile("/tmp/schema_cache")
-		json.Unmarshal(fileData, &schemas)
-	}
-
-	if schemas == nil {
-		schemas = make(map[string]map[string][]string)
-	}
-	if schemas[dataSource] == nil {
-		schemas[dataSource] = make(map[string][]string)
-	}
-
-	columnNamesWithDSN := append([]string{"dsn", "tablename"}, columnNames...)
-	schemas[dataSource][tablename] = columnNamesWithDSN
-
-	// Serialize and save to /tmp/schema_cache
-	jsonData, err := json.Marshal(schemas)
-	if err != nil {
-		return nil, err
-	}
-	err = os.WriteFile("/tmp/schema_cache", jsonData, 0644)
-	if err != nil {
-		return nil, err
-	}
-
-	// Reconstruct the columns from the cached data
-	cols := make([]*plugin.Column, len(columnNames))
-	for i, columnName := range columnNames {
-		if columnName == "dsn" {
-			cols[i] = &plugin.Column{
-				Name:        "dsn",
-				Type:        proto.ColumnType_STRING,
-				Description: "Data Source Name for the ODBC connection",
-				Transform:   transform.FromQual("dsn"),
-			}
-		} else if columnName == "tablename" {
-			cols[i] = &plugin.Column{
-				Name:        "tablename",
-				Type:        proto.ColumnType_STRING,
-				Description: "Table name",
-				Transform:   transform.FromQual("tablename"),
-			}
-		} else {
-			cols[i] = &plugin.Column{
-				Name:        columnName,
-				Type:        proto.ColumnType_STRING,
-				Description: dataSource + " " + columnName,
-				Transform:   transform.FromField(helpers.EscapePropertyName(columnName)),
-			}
-		}
-	}
-
-	plugin.Logger(ctx).Debug("odbc.getSchema", "cols", cols)
-	return cols, nil
+    plugin.Logger(ctx).Debug("odbc.getSchema", "cols", cols)
+    return cols, nil
 }
+
 
 func tableODBC(ctx context.Context, connection *plugin.Connection) (*plugin.Table, error) {
     dsn := ctx.Value("dsn").(string)
     tablename := ctx.Value("tablename").(string)
 
-    cols, err := getSchema(ctx, dsn, tablename)
+    cols, err := getSchemas(ctx, dsn, tablename)
     if err != nil {
         return nil, err
     }
@@ -148,7 +73,6 @@ func tableODBC(ctx context.Context, connection *plugin.Connection) (*plugin.Tabl
         Columns: cols,
     }, nil
 }
-
 
 func listODBC(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (interface{}, error) {
     plugin.Logger(ctx).Debug("listODBC start")

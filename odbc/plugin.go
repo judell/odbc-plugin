@@ -2,7 +2,6 @@ package odbc
 
 import (
 	"context"
-	"os"
 	"strings"
 
 	"github.com/turbot/steampipe-plugin-sdk/v5/plugin"
@@ -10,7 +9,6 @@ import (
 )
 
 func Plugin(ctx context.Context) *plugin.Plugin {
-    os.RemoveAll("/tmp/schema_cache")	
 	p := &plugin.Plugin{
 		Name: "steampipe-plugin-odbc",
 		ConnectionConfigSchema: &plugin.ConnectionConfigSchema{
