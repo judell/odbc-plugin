@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"database/sql"
 
@@ -130,55 +131,51 @@ func getSchema(ctx context.Context, dataSource string, tablename string) ([]*plu
 }
 
 func tableODBC(ctx context.Context, connection *plugin.Connection) (*plugin.Table, error) {
-	dsn := ctx.Value("dsn").(string)
-	tablename := ctx.Value("tablename").(string)
+    dsn := ctx.Value("dsn").(string)
+    tablename := ctx.Value("tablename").(string)
 
-	cols, err := getSchema(ctx, dsn, tablename)
+    cols, err := getSchema(ctx, dsn, tablename)
+    if err != nil {
+        return nil, err
+    }
 
-	plugin.Logger(ctx).Debug("tableODBC", "cols", cols)
-
-	if err != nil {
-		return nil, err
-	}
-
-	dsnCol := &plugin.KeyColumn{Name: "dsn"}
-	tableCol := &plugin.KeyColumn{Name: "tablename"}
-
-	return &plugin.Table{
-		Name:        tablename,
-		Description: dsn,
-		List: &plugin.ListConfig{
-			Hydrate: listODBC,
-			KeyColumns: []*plugin.KeyColumn{
-				dsnCol,
-				tableCol,
-			},
-		},
-		Columns: cols,
-	}, nil
+    return &plugin.Table{
+        Name:        strings.ToLower(dsn) + "_" + tablename,
+        Description: dsn,
+        List: &plugin.ListConfig{
+            Hydrate: listODBC,
+        },
+        Columns: cols,
+    }, nil
 }
+
 
 func listODBC(ctx context.Context, d *plugin.QueryData, h *plugin.HydrateData) (interface{}, error) {
-	plugin.Logger(ctx).Debug("listODBC start")
+    plugin.Logger(ctx).Debug("listODBC start")
 
-	dsn := d.EqualsQualString("dsn")
-	tablename := d.EqualsQualString("tablename")
+    // Split the table name to get dsn and tablename
+    parts := strings.Split(d.Table.Name, "_")
+    if len(parts) != 2 {
+        return nil, fmt.Errorf("invalid table name format")
+    }
+    dsn, tablename := parts[0], parts[1]
 
-	plugin.Logger(ctx).Debug("listODBC", "dsn", dsn, "tablename", tablename)
+    plugin.Logger(ctx).Debug("listODBC", "dsn", dsn, "tablename", tablename)
 
-	// Fetch data from the database
-	results, err := fetchFromDatabase(ctx, dsn, tablename)
-	if err != nil {
-		return nil, err
-	}
+    // Fetch data from the database
+    results, err := fetchFromDatabase(ctx, dsn, tablename)
+    if err != nil {
+        return nil, err
+    }
 
-	// Stream the results
-	for _, result := range results {
-		d.StreamListItem(ctx, result)
-	}
+    // Stream the results
+    for _, result := range results {
+        d.StreamListItem(ctx, result)
+    }
 
-	return nil, nil
+    return nil, nil
 }
+
 
 func fetchFromDatabase(ctx context.Context, dsn string, tablename string) ([]map[string]interface{}, error) {
 	plugin.Logger(ctx).Debug("odbc: fetchFromDatabase", "dsn", dsn, "tablename", tablename)
