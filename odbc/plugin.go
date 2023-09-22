@@ -26,14 +26,14 @@ func PluginODBCTables(ctx context.Context, d *plugin.TableMapData) (map[string]*
 
 	config := GetConfig(d.Connection)
 	for _, dataSource := range config.DataSources {
-		dsn, tableName := splitDataSourceAndTable(dataSource)
+		dsn, tablename := splitDataSourceAndTable(dataSource)
 		tableCtx := context.WithValue(ctx, "dsn", dsn)
-		tableCtx = context.WithValue(tableCtx, "tableName", tableName)
+		tableCtx = context.WithValue(tableCtx, "tablename", tablename)
 		table, err := tableODBC(tableCtx, d.Connection)
 		if err != nil {
 			return nil, err
 		}
-		tables[tableName] = table
+		tables[tablename] = table
 	}
 
 	return tables, nil
