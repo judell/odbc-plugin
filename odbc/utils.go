@@ -1,15 +1,13 @@
 package odbc
 
-// Convert column index number to corresponding letter
-// For example, 1:a, 2:b, 27:aa, 55:bc
-func intToLetters(colIndex int) (letter string) {
-	colIndex--
-	if firstLetter := colIndex / 26; firstLetter > 0 {
-		letter += intToLetters(firstLetter)
-		letter += string(rune('a' + colIndex%26))
-	} else {
-		letter += string(rune('a' + colIndex))
-	}
+import (
+	"strings"
+)
 
-	return
+func splitDataSourceAndTable(s string) (string, string) {
+	parts := strings.SplitN(s, ":", 2)
+	if len(parts) != 2 {
+		return "", ""
+	}
+	return parts[0], parts[1]
 }

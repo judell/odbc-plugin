@@ -3,17 +3,13 @@ package odbc
 import (
 	"context"
 
-	//"encoding/json"
 	"fmt"
-	//"os"
 	"strings"
 
 	"database/sql"
+	_ "github.com/alexbrainman/odbc"
 
 	"github.com/turbot/go-kit/helpers"
-
-	//"fmt"
-	_ "github.com/alexbrainman/odbc"
 	"github.com/turbot/steampipe-plugin-sdk/v5/grpc/proto"
 	"github.com/turbot/steampipe-plugin-sdk/v5/plugin"
 	"github.com/turbot/steampipe-plugin-sdk/v5/plugin/transform"
@@ -65,7 +61,7 @@ func tableODBC(ctx context.Context, connection *plugin.Connection) (*plugin.Tabl
 
 	return &plugin.Table{
 		Name:        strings.ToLower(dsn) + "_" + tablename,
-		Description: dsn,
+		Description: dsn + ":" + tablename,
 		List: &plugin.ListConfig{
 			Hydrate: listODBC,
 		},
