@@ -12,7 +12,7 @@ og_image: "/images/plugins/turbot/odbc-social-graphic.png"
 
 # ODBC + Steampipe
 
-Open Database Connectivity (ODBC) is a standard application programming interface (API) for accessing SQL databases.
+Open Database Connectivity (ODBC) is a standard application programming interface (API) for accessing databases.
 
 [Steampipe](https://steampipe.io) is an open source CLI to instantly query data using SQL.
 
